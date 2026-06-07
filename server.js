@@ -1,138 +1,147 @@
 const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
+const morgan = require('morgan');
+const compression = require('compression');
 const cookieParser = require('cookie-parser');
 require('dotenv').config();
 
 // Import middleware
 const authMiddleware = require('./src/middleware/auth');
-const rateLimitMiddleware = require('./src/middleware/rateLimit');
-const config = require('./config');
+const rateLimit = require('./src/middleware/rateLimit');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 // Security middleware
-app.use(helmet({
-  contentSecurityPolicy: {
-    directives: {
-      defaultSrc: ["'self'"],
-      styleSrc: ["'self'", "'unsafe-inline'"],
-      scriptSrc: ["'self'"],
-      imgSrc: ["'self'", "data:", "https:"],
-    },
-  },
-}));
-
-// CORS configuration
+app.use(helmet());
 app.use(cors({
-  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:3000'],
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-API-Key']
+  origin: process.env.CORS_ORIGIN || ['http://localhost:3000', 'https://your-frontend-domain.com'],
+  credentials: true
 }));
 
-// Basic middleware
+// Compression middleware
+app.use(compression());
+
+// Logging middleware
+app.use(morgan('combined'));
+
+// Body parsing middleware
 app.use(express.json({ limit: '10mb' }));
-app.use(express.urlencoded({ extended: true }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(cookieParser());
 
-// Apply rate limiting
-app.use(rateLimitMiddleware);
+// Rate limiting middleware
+app.use(rateLimit);
 
 // Health check endpoint (public)
 app.get('/health', (req, res) => {
   res.status(200).json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    version: '1.0.0',
+    uptime: process.uptime(),
     environment: process.env.NODE_ENV || 'development'
   });
 });
 
 // Metrics endpoint (public)
 app.get('/metrics', (req, res) => {
-  const memUsage = process.memoryUsage();
-  const uptime = process.uptime();
-  
+  const memoryUsage = process.memoryUsage();
   res.status(200).json({
-    uptime: `${Math.floor(uptime)}s`,
     memory: {
-      used: `${Math.round(memUsage.heapUsed / 1024 / 1024)}MB`,
-      total: `${Math.round(memUsage.heapTotal / 1024 / 1024)}MB`,
-      external: `${Math.round(memUsage.external / 1024 / 1024)}MB`
+      rss: `${Math.round(memoryUsage.rss / 1024 / 1024)} MB`,
+      heapTotal: `${Math.round(memoryUsage.heapTotal / 1024 / 1024)} MB`,
+      heapUsed: `${Math.round(memoryUsage.heapUsed / 1024 / 1024)} MB`,
+      external: `${Math.round(memoryUsage.external / 1024 / 1024)} MB`
+    },
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Welcome endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    message: 'Welcome to Node.js Server App',
+    version: '1.0.0',
+    description: 'Node.js server with authentication and rate limiting',
+    endpoints: {
+      health: '/health',
+      metrics: '/metrics',
+      auth: {
+        login: '/api/v1/auth/login',
+        register: '/api/v1/auth/register',
+        refresh: '/api/v1/auth/refresh'
+      }
     },
     timestamp: new Date().toISOString()
   });
 });
 
-// API routes with authentication
-app.use('/api', authMiddleware.authenticate);
-
-// Example protected API endpoints
-app.get('/api/user/profile', (req, res) => {
-  res.json({
-    message: 'User profile data',
-    user: {
-      id: req.user.id,
-      roles: req.user.roles
-    },
-    timestamp: new Date().toISOString()
-  });
-});
-
-app.get('/api/admin/users', authMiddleware.requireRole(['admin']), (req, res) => {
-  res.json({
-    message: 'Admin users list',
-    data: [
-      { id: 1, name: 'John Doe', role: 'user' },
-      { id: 2, name: 'Jane Smith', role: 'admin' }
-    ],
-    requestedBy: req.user.id,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Auth endpoints (public paths defined in middleware)
+// Authentication routes (public)
 app.post('/api/v1/auth/login', (req, res) => {
-  // Mock login endpoint
-  const { email, password } = req.body;
-  
-  // This is a mock implementation - replace with real authentication
-  if (email && password) {
-    const jwt = require('jsonwebtoken');
-    const token = jwt.sign(
-      { id: 1, email, roles: ['user'] },
-      config.auth.jwtSecret || 'your-secret-key',
-      { expiresIn: '1h' }
-    );
-    
-    res.json({
-      message: 'Login successful',
-      token,
-      user: { id: 1, email, roles: ['user'] }
-    });
-  } else {
-    res.status(400).json({
-      error: 'Email and password required'
-    });
-  }
+  // TODO: Implement login logic
+  res.status(200).json({
+    message: 'Login endpoint - implementation pending',
+    body: req.body
+  });
 });
 
 app.post('/api/v1/auth/register', (req, res) => {
-  // Mock registration endpoint
-  const { email, password, name } = req.body;
-  
-  if (email && password && name) {
-    res.status(201).json({
-      message: 'User registered successfully',
-      user: { id: Date.now(), email, name, roles: ['user'] }
-    });
-  } else {
-    res.status(400).json({
-      error: 'Email, password, and name required'
+  // TODO: Implement registration logic
+  res.status(200).json({
+    message: 'Registration endpoint - implementation pending',
+    body: req.body
+  });
+});
+
+app.post('/api/v1/auth/refresh', (req, res) => {
+  // TODO: Implement token refresh logic
+  res.status(200).json({
+    message: 'Token refresh endpoint - implementation pending',
+    body: req.body
+  });
+});
+
+// Protected routes (require authentication)
+app.get('/api/v1/user/profile', authMiddleware.authenticate, (req, res) => {
+  res.status(200).json({
+    message: 'User profile endpoint',
+    user: req.user,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Admin routes (require admin role)
+app.get('/api/v1/admin/users', 
+  authMiddleware.authenticate,
+  authMiddleware.requireRole(['admin']),
+  (req, res) => {
+    res.status(200).json({
+      message: 'Admin users endpoint',
+      user: req.user,
+      timestamp: new Date().toISOString()
     });
   }
+);
+
+// API key protected route
+app.get('/api/v1/service/status', authMiddleware.authenticateApiKey, (req, res) => {
+  res.status(200).json({
+    message: 'Service status endpoint',
+    apiKey: req.apiKey,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error('Error:', err);
+  res.status(err.status || 500).json({
+    error: 'Internal Server Error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong',
+    timestamp: new Date().toISOString()
+  });
 });
 
 // 404 handler
@@ -144,21 +153,15 @@ app.use('*', (req, res) => {
   });
 });
 
-// Global error handler
-app.use((err, req, res, next) => {
-  console.error('Error:', err.stack);
-  
-  res.status(err.status || 500).json({
-    error: 'Internal Server Error',
-    message: process.env.NODE_ENV === 'production' ? 'Something went wrong' : err.message,
-    timestamp: new Date().toISOString()
-  });
-});
-
 // Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`📈 Metrics: http://localhost:${PORT}/metrics`);
-  console.log(`🔒 Environment: ${process.env.NODE_ENV || 'development'}`);
-});
+if (require.main === module) {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on port ${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/health`);
+    console.log(`📈 Metrics: http://localhost:${PORT}/metrics`);
+    console.log(`🌍 Environment: ${process.env.NODE_ENV || 'development'}`);
+  });
+}
+
+// For Vercel
+module.exports = app;
